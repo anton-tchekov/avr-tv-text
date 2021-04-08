@@ -1,0 +1,1402 @@
+   1               		.file	"main.c"
+   2               	__SP_H__ = 0x3e
+   3               	__SP_L__ = 0x3d
+   4               	__SREG__ = 0x3f
+   5               	__tmp_reg__ = 0
+   6               	__zero_reg__ = 1
+   7               		.text
+   8               	.Ltext0:
+   9               		.cfi_sections	.debug_frame
+  10               	.global	blank_line
+  12               	blank_line:
+  13               	.LFB4:
+  14               		.file 1 "main.c"
+   1:main.c        **** #include <string.h>
+   2:main.c        **** #include <avr/io.h>
+   3:main.c        **** #include <avr/interrupt.h>
+   4:main.c        **** #include <avr/pgmspace.h>
+   5:main.c        **** 
+   6:main.c        **** typedef uint8_t u8;
+   7:main.c        **** typedef uint16_t u16;
+   8:main.c        **** typedef uint32_t u32;
+   9:main.c        **** 
+  10:main.c        **** typedef int8_t i8;
+  11:main.c        **** typedef int16_t i16;
+  12:main.c        **** typedef int32_t i32;
+  13:main.c        **** 
+  14:main.c        **** static u8 spi_receive(void)
+  15:main.c        **** {
+  16:main.c        **** 	while(!(SPSR & (1 << SPIF)));
+  17:main.c        **** 	return SPDR;
+  18:main.c        **** }
+  19:main.c        **** 
+  20:main.c        **** #define _TIME_HSYNC                4.7
+  21:main.c        **** #define _TIME_VSYNC               58.85
+  22:main.c        **** #define _TIME_ACTIVE              46
+  23:main.c        **** #define _NTSC_TIME_SCANLINE       63.55
+  24:main.c        **** #define _NTSC_TIME_OUTPUT_START   12
+  25:main.c        **** #define _NTSC_LINE_FRAME         262
+  26:main.c        **** #define _NTSC_LINE_START_VSYNC     0
+  27:main.c        **** #define _NTSC_LINE_STOP_VSYNC      3
+  28:main.c        **** #define _NTSC_LINE_DISPLAY       216
+  29:main.c        **** 
+  30:main.c        **** #define VIDEO_OUT                   PORTD
+  31:main.c        **** #define VIDEO_DIR                   DDRD
+  32:main.c        **** #define VIDEO_PIN                  1
+  33:main.c        **** 
+  34:main.c        **** #define XCK_DIR                     DDRD
+  35:main.c        **** #define XCK_PIN                    4
+  36:main.c        **** 
+  37:main.c        **** #define SYNC_OUT                    PORTB
+  38:main.c        **** #define SYNC_DIR                    DDRB
+  39:main.c        **** #define SYNC_PIN                   1
+  40:main.c        **** 
+  41:main.c        **** #define VIDEO_WIDTH               40
+  42:main.c        **** #define VIDEO_HEIGHT              25
+  43:main.c        **** 
+  44:main.c        **** #define CELL_WIDTH                 8
+  45:main.c        **** #define CELL_HEIGHT                8
+  46:main.c        **** 
+  47:main.c        **** #define _CYCLES_PER_US \
+  48:main.c        **** 		(F_CPU / 1000000)
+  49:main.c        **** 
+  50:main.c        **** #define _CYCLES_VSYNC \
+  51:main.c        **** 		((_TIME_VSYNC * _CYCLES_PER_US) - 1)
+  52:main.c        **** 
+  53:main.c        **** #define _CYCLES_HSYNC \
+  54:main.c        **** 		((_TIME_HSYNC * _CYCLES_PER_US) - 1)
+  55:main.c        **** 
+  56:main.c        **** #define _NTSC_LINE_MID \
+  57:main.c        **** 		((_NTSC_LINE_FRAME - _NTSC_LINE_DISPLAY) / 2 + \
+  58:main.c        **** 		_NTSC_LINE_DISPLAY / 2 + _NTSC_LINE_STOP_VSYNC)
+  59:main.c        **** 
+  60:main.c        **** #define _NTSC_CYCLES_SCANLINE \
+  61:main.c        **** 		((_NTSC_TIME_SCANLINE * _CYCLES_PER_US) - 1)
+  62:main.c        **** 
+  63:main.c        **** #define _NTSC_CYCLES_OUTPUT_START \
+  64:main.c        **** 		((_NTSC_TIME_OUTPUT_START * _CYCLES_PER_US) - 1)
+  65:main.c        **** 
+  66:main.c        **** static const u8 font[2048] PROGMEM =
+  67:main.c        **** {
+  68:main.c        **** 	0x00, 0xF0, 0x0F, 0xFF, 0x00, 0xF0, 0x0F, 0xFF, 0x00, 0xF0, 0x0F, 0xFF, 0x00, 0xF0, 0x0F, 0xFF, 0x
+  69:main.c        **** 	0x00, 0xF0, 0x0F, 0xFF, 0x00, 0xF0, 0x0F, 0xFF, 0x00, 0xF0, 0x0F, 0xFF, 0x00, 0xF0, 0x0F, 0xFF, 0x
+  70:main.c        **** 	0x00, 0xF0, 0x0F, 0xFF, 0x00, 0xF0, 0x0F, 0xFF, 0x00, 0xF0, 0x0F, 0xFF, 0x00, 0xF0, 0x0F, 0xFF, 0x
+  71:main.c        **** 	0x00, 0xF0, 0x0F, 0xFF, 0x00, 0xF0, 0x0F, 0xFF, 0x00, 0xF0, 0x0F, 0xFF, 0x00, 0xF0, 0x0F, 0xFF, 0x
+  72:main.c        **** 	0x00, 0x00, 0x00, 0x00, 0xF0, 0xF0, 0xF0, 0xF0, 0x0F, 0x0F, 0x0F, 0x0F, 0xFF, 0xFF, 0xFF, 0xFF, 0x
+  73:main.c        **** 	0x00, 0x00, 0x00, 0x00, 0xF0, 0xF0, 0xF0, 0xF0, 0x0F, 0x0F, 0x0F, 0x0F, 0xFF, 0xFF, 0xFF, 0xFF, 0x
+  74:main.c        **** 	0x00, 0x00, 0x00, 0x00, 0xF0, 0xF0, 0xF0, 0xF0, 0x0F, 0x0F, 0x0F, 0x0F, 0xFF, 0xFF, 0xFF, 0xFF, 0x
+  75:main.c        **** 	0x00, 0x00, 0x00, 0x00, 0xF0, 0xF0, 0xF0, 0xF0, 0x0F, 0x0F, 0x0F, 0x0F, 0xFF, 0xFF, 0xFF, 0xFF, 0x
+  76:main.c        **** 
+  77:main.c        **** 	(u8)~0x00, (u8)~0xF0, (u8)~0x0F, (u8)~0xFF, (u8)~0x00, (u8)~0xF0, (u8)~0x0F, (u8)~0xFF, (u8)~0x00,
+  78:main.c        **** 	(u8)~0x00, (u8)~0xF0, (u8)~0x0F, (u8)~0xFF, (u8)~0x00, (u8)~0xF0, (u8)~0x0F, (u8)~0xFF, (u8)~0x00,
+  79:main.c        **** 	(u8)~0x00, (u8)~0xF0, (u8)~0x0F, (u8)~0xFF, (u8)~0x00, (u8)~0xF0, (u8)~0x0F, (u8)~0xFF, (u8)~0x00,
+  80:main.c        **** 	(u8)~0x00, (u8)~0xF0, (u8)~0x0F, (u8)~0xFF, (u8)~0x00, (u8)~0xF0, (u8)~0x0F, (u8)~0xFF, (u8)~0x00,
+  81:main.c        **** 	(u8)~0x00, (u8)~0x00, (u8)~0x00, (u8)~0x00, (u8)~0xF0, (u8)~0xF0, (u8)~0xF0, (u8)~0xF0, (u8)~0x0F,
+  82:main.c        **** 	(u8)~0x00, (u8)~0x00, (u8)~0x00, (u8)~0x00, (u8)~0xF0, (u8)~0xF0, (u8)~0xF0, (u8)~0xF0, (u8)~0x0F,
+  83:main.c        **** 	(u8)~0x00, (u8)~0x00, (u8)~0x00, (u8)~0x00, (u8)~0xF0, (u8)~0xF0, (u8)~0xF0, (u8)~0xF0, (u8)~0x0F,
+  84:main.c        **** 	(u8)~0x00, (u8)~0x00, (u8)~0x00, (u8)~0x00, (u8)~0xF0, (u8)~0xF0, (u8)~0xF0, (u8)~0xF0, (u8)~0x0F,
+  85:main.c        **** };
+  86:main.c        **** 
+  87:main.c        **** void blank_line(void);
+  88:main.c        **** void active_line(void);
+  89:main.c        **** 
+  90:main.c        **** static volatile u8 flag = 0;
+  91:main.c        **** 
+  92:main.c        **** static u8 video_memory[VIDEO_WIDTH * VIDEO_HEIGHT];
+  93:main.c        **** static u8 *video_ptr = video_memory;
+  94:main.c        **** static u16 scanline = 0;
+  95:main.c        **** static void (*line_handler)(void) = &blank_line; 
+  96:main.c        **** 
+  97:main.c        **** ISR(TIMER1_COMPA_vect)
+  98:main.c        **** {
+  99:main.c        **** 	sei();
+ 100:main.c        **** 	asm("sleep\n");
+ 101:main.c        **** }
+ 102:main.c        **** 
+ 103:main.c        **** ISR(TIMER1_COMPB_vect)
+ 104:main.c        **** {
+ 105:main.c        **** 	line_handler();
+ 106:main.c        **** 	++scanline;
+ 107:main.c        **** }
+ 108:main.c        **** 
+ 109:main.c        **** void blank_line(void)
+ 110:main.c        **** {
+  15               		.loc 1 110 1 view -0
+  16               		.cfi_startproc
+  17               	/* prologue: function */
+  18               	/* frame size = 0 */
+  19               	/* stack size = 0 */
+  20               	.L__stack_usage = 0
+ 111:main.c        **** 	if(scanline == _NTSC_LINE_STOP_VSYNC)
+  21               		.loc 1 111 2 view .LVU1
+  22               		.loc 1 111 14 is_stmt 0 view .LVU2
+  23 0000 8091 0000 		lds r24,scanline
+  24 0004 9091 0000 		lds r25,scanline+1
+  25               		.loc 1 111 4 view .LVU3
+  26 0008 8330      		cpi r24,3
+  27 000a 9105      		cpc r25,__zero_reg__
+  28 000c 01F4      		brne .L2
+ 112:main.c        **** 	{
+ 113:main.c        **** 		OCR1A = _CYCLES_HSYNC;
+  29               		.loc 1 113 3 is_stmt 1 view .LVU4
+  30               		.loc 1 113 9 is_stmt 0 view .LVU5
+  31 000e 8AE4      		ldi r24,lo8(74)
+  32 0010 90E0      		ldi r25,0
+  33 0012 9093 8900 		sts 136+1,r25
+  34 0016 8093 8800 		sts 136,r24
+  35 001a 0895      		ret
+  36               	.L2:
+ 114:main.c        **** 	}
+ 115:main.c        **** 	else if(scanline == _NTSC_LINE_MID - (VIDEO_HEIGHT * CELL_HEIGHT) / 2)
+  37               		.loc 1 115 7 is_stmt 1 view .LVU6
+  38               		.loc 1 115 9 is_stmt 0 view .LVU7
+  39 001c 8232      		cpi r24,34
+  40 001e 9105      		cpc r25,__zero_reg__
+  41 0020 01F4      		brne .L4
+  42               	.LBB5:
+  43               	.LBI5:
+ 109:main.c        **** {
+  44               		.loc 1 109 6 is_stmt 1 view .LVU8
+  45               	.LBB6:
+ 116:main.c        **** 	{
+ 117:main.c        **** 		TIMSK1 = (1 << OCIE1A) | (1 << OCIE1B);
+  46               		.loc 1 117 3 view .LVU9
+  47               		.loc 1 117 10 is_stmt 0 view .LVU10
+  48 0022 86E0      		ldi r24,lo8(6)
+  49 0024 8093 6F00 		sts 111,r24
+ 118:main.c        **** 		video_ptr = video_memory;
+  50               		.loc 1 118 3 is_stmt 1 view .LVU11
+  51               		.loc 1 118 13 is_stmt 0 view .LVU12
+  52 0028 80E0      		ldi r24,lo8(video_memory)
+  53 002a 90E0      		ldi r25,hi8(video_memory)
+  54 002c 9093 0000 		sts video_ptr+1,r25
+  55 0030 8093 0000 		sts video_ptr,r24
+ 119:main.c        **** 		line_handler = &active_line;
+  56               		.loc 1 119 3 is_stmt 1 view .LVU13
+  57               		.loc 1 119 16 is_stmt 0 view .LVU14
+  58 0034 80E0      		ldi r24,lo8(gs(active_line))
+  59 0036 90E0      		ldi r25,hi8(gs(active_line))
+  60 0038 9093 0000 		sts line_handler+1,r25
+  61 003c 8093 0000 		sts line_handler,r24
+ 120:main.c        **** 	}
+ 121:main.c        **** 	else if(scanline > _NTSC_LINE_FRAME)
+ 122:main.c        **** 	{
+ 123:main.c        **** 		OCR1A = _CYCLES_VSYNC;
+ 124:main.c        **** 		scanline = 0;
+ 125:main.c        **** 	}
+ 126:main.c        **** }
+  62               		.loc 1 126 1 view .LVU15
+  63 0040 0895      		ret
+  64               	.L4:
+  65               	.LBE6:
+  66               	.LBE5:
+ 121:main.c        **** 	{
+  67               		.loc 1 121 7 is_stmt 1 view .LVU16
+ 121:main.c        **** 	{
+  68               		.loc 1 121 9 is_stmt 0 view .LVU17
+  69 0042 8730      		cpi r24,7
+  70 0044 9140      		sbci r25,1
+  71 0046 00F0      		brlo .L1
+ 123:main.c        **** 		scanline = 0;
+  72               		.loc 1 123 3 is_stmt 1 view .LVU18
+ 123:main.c        **** 		scanline = 0;
+  73               		.loc 1 123 9 is_stmt 0 view .LVU19
+  74 0048 8CEA      		ldi r24,lo8(-84)
+  75 004a 93E0      		ldi r25,lo8(3)
+  76 004c 9093 8900 		sts 136+1,r25
+  77 0050 8093 8800 		sts 136,r24
+ 124:main.c        **** 	}
+  78               		.loc 1 124 3 is_stmt 1 view .LVU20
+ 124:main.c        **** 	}
+  79               		.loc 1 124 12 is_stmt 0 view .LVU21
+  80 0054 1092 0000 		sts scanline+1,__zero_reg__
+  81 0058 1092 0000 		sts scanline,__zero_reg__
+  82               	.L1:
+  83               	/* epilogue start */
+  84               		.loc 1 126 1 view .LVU22
+  85 005c 0895      		ret
+  86               		.cfi_endproc
+  87               	.LFE4:
+  89               	.global	active_line
+  91               	active_line:
+  92               	.LFB5:
+ 127:main.c        **** 
+ 128:main.c        **** void active_line(void)
+ 129:main.c        **** {
+  93               		.loc 1 129 1 is_stmt 1 view -0
+  94               		.cfi_startproc
+  95               	/* prologue: function */
+  96               	/* frame size = 0 */
+  97               	/* stack size = 0 */
+  98               	.L__stack_usage = 0
+ 130:main.c        **** 	static uint8_t char_row;
+  99               		.loc 1 130 2 view .LVU24
+ 131:main.c        **** 	register uint8_t cnt;
+ 100               		.loc 1 131 2 view .LVU25
+ 132:main.c        **** 	const register uint8_t *char_col, *char_ptr;
+ 101               		.loc 1 132 2 view .LVU26
+ 133:main.c        **** 
+ 134:main.c        **** 	char_ptr = video_ptr;
+ 102               		.loc 1 134 2 view .LVU27
+ 103               		.loc 1 134 11 is_stmt 0 view .LVU28
+ 104 005e A091 0000 		lds r26,video_ptr
+ 105 0062 B091 0000 		lds r27,video_ptr+1
+ 106               	.LVL0:
+ 135:main.c        **** 	char_col = font + ((uint16_t)char_row << 7);
+ 107               		.loc 1 135 2 is_stmt 1 view .LVU29
+ 108               		.loc 1 135 21 is_stmt 0 view .LVU30
+ 109 0066 2091 0000 		lds r18,char_row.1822
+ 110               		.loc 1 135 40 view .LVU31
+ 111 006a 922F      		mov r25,r18
+ 112 006c 9695      		lsr r25
+ 113 006e 822F      		mov r24,r18
+ 114 0070 8795      		ror r24
+ 115 0072 8827      		clr r24
+ 116 0074 8795      		ror r24
+ 117               	.LVL1:
+ 136:main.c        **** 	UDR0 = 0;
+ 118               		.loc 1 136 2 is_stmt 1 view .LVU32
+ 119               		.loc 1 136 7 is_stmt 0 view .LVU33
+ 120 0076 1092 C600 		sts 198,__zero_reg__
+ 137:main.c        **** 	UCSR0B = (1 << TXEN0);
+ 121               		.loc 1 137 2 is_stmt 1 view .LVU34
+ 122               		.loc 1 137 9 is_stmt 0 view .LVU35
+ 123 007a 28E0      		ldi r18,lo8(8)
+ 124 007c 2093 C100 		sts 193,r18
+ 138:main.c        **** 	for(cnt = 0; cnt < VIDEO_WIDTH; ++cnt, ++char_ptr)
+ 125               		.loc 1 138 2 is_stmt 1 view .LVU36
+ 126               	.LVL2:
+ 127               		.loc 1 138 15 view .LVU37
+ 128 0080 9D01      		movw r18,r26
+ 129 0082 285D      		subi r18,-40
+ 130 0084 3F4F      		sbci r19,-1
+ 131               	.LVL3:
+ 132               	.L6:
+ 139:main.c        **** 	{
+ 140:main.c        **** 		UDR0 = pgm_read_byte(char_col + *char_ptr);
+ 133               		.loc 1 140 3 discriminator 3 view .LVU38
+ 134               	.LBB11:
+ 135               		.loc 1 140 10 discriminator 3 view .LVU39
+ 136               		.loc 1 140 10 discriminator 3 view .LVU40
+ 137               		.loc 1 140 10 discriminator 3 view .LVU41
+ 138 0086 ED91      		ld r30,X+
+ 139               	.LVL4:
+ 140               		.loc 1 140 10 is_stmt 0 discriminator 3 view .LVU42
+ 141 0088 E80F      		add r30,r24
+ 142 008a F92F      		mov r31,r25
+ 143 008c F11D      		adc r31,__zero_reg__
+ 144 008e E050      		subi r30,lo8(-(font))
+ 145 0090 F040      		sbci r31,hi8(-(font))
+ 146               	.LVL5:
+ 147               		.loc 1 140 10 discriminator 3 view .LVU43
+ 148               	/* #APP */
+ 149               	 ;  140 "main.c" 1
+ 150 0092 E491      		lpm r30, Z
+ 151               		
+ 152               	 ;  0 "" 2
+ 153               	.LVL6:
+ 154               		.loc 1 140 10 is_stmt 1 discriminator 3 view .LVU44
+ 155               	/* #NOAPP */
+ 156               	.LBE11:
+ 157               		.loc 1 140 8 is_stmt 0 discriminator 3 view .LVU45
+ 158 0094 E093 C600 		sts 198,r30
+ 159               	.LVL7:
+ 138:main.c        **** 	for(cnt = 0; cnt < VIDEO_WIDTH; ++cnt, ++char_ptr)
+ 160               		.loc 1 138 34 is_stmt 1 discriminator 3 view .LVU46
+ 138:main.c        **** 	for(cnt = 0; cnt < VIDEO_WIDTH; ++cnt, ++char_ptr)
+ 161               		.loc 1 138 15 discriminator 3 view .LVU47
+ 138:main.c        **** 	for(cnt = 0; cnt < VIDEO_WIDTH; ++cnt, ++char_ptr)
+ 162               		.loc 1 138 2 is_stmt 0 discriminator 3 view .LVU48
+ 163 0098 A217      		cp r26,r18
+ 164 009a B307      		cpc r27,r19
+ 165 009c 01F4      		brne .L6
+ 166               	.LVL8:
+ 167               	.L7:
+ 141:main.c        **** 	}
+ 142:main.c        **** 
+ 143:main.c        **** 	while((UCSR0A & (1 << TXC0)) == 0);
+ 168               		.loc 1 143 36 is_stmt 1 discriminator 1 view .LVU49
+ 169               		.loc 1 143 7 discriminator 1 view .LVU50
+ 170               		.loc 1 143 9 is_stmt 0 discriminator 1 view .LVU51
+ 171 009e 8091 C000 		lds r24,192
+ 172               		.loc 1 143 7 discriminator 1 view .LVU52
+ 173 00a2 86FF      		sbrs r24,6
+ 174 00a4 00C0      		rjmp .L7
+ 144:main.c        **** 	UDR0 = 0;
+ 175               		.loc 1 144 2 is_stmt 1 view .LVU53
+ 176               		.loc 1 144 7 is_stmt 0 view .LVU54
+ 177 00a6 1092 C600 		sts 198,__zero_reg__
+ 145:main.c        **** 	UCSR0B = 0;
+ 178               		.loc 1 145 2 is_stmt 1 view .LVU55
+ 179               		.loc 1 145 9 is_stmt 0 view .LVU56
+ 180 00aa 1092 C100 		sts 193,__zero_reg__
+ 146:main.c        **** 	if(++char_row == CELL_HEIGHT)
+ 181               		.loc 1 146 2 is_stmt 1 view .LVU57
+ 182               		.loc 1 146 5 is_stmt 0 view .LVU58
+ 183 00ae 8091 0000 		lds r24,char_row.1822
+ 184 00b2 91E0      		ldi r25,lo8(1)
+ 185 00b4 980F      		add r25,r24
+ 186               		.loc 1 146 4 view .LVU59
+ 187 00b6 8730      		cpi r24,lo8(7)
+ 188 00b8 01F0      		breq .L8
+ 189 00ba 9093 0000 		sts char_row.1822,r25
+ 190 00be 0895      		ret
+ 191               	.L8:
+ 147:main.c        **** 	{
+ 148:main.c        **** 		char_row = 0;
+ 192               		.loc 1 148 3 is_stmt 1 view .LVU60
+ 193               		.loc 1 148 12 is_stmt 0 view .LVU61
+ 194 00c0 1092 0000 		sts char_row.1822,__zero_reg__
+ 149:main.c        **** 		if(scanline == _NTSC_LINE_MID + (VIDEO_HEIGHT * CELL_HEIGHT) / 2)
+ 195               		.loc 1 149 3 is_stmt 1 view .LVU62
+ 196               		.loc 1 149 5 is_stmt 0 view .LVU63
+ 197 00c4 8091 0000 		lds r24,scanline
+ 198 00c8 9091 0000 		lds r25,scanline+1
+ 199 00cc 8A3E      		cpi r24,-22
+ 200 00ce 9105      		cpc r25,__zero_reg__
+ 201 00d0 01F4      		brne .L10
+ 202               	.LBB12:
+ 203               	.LBI12:
+ 128:main.c        **** {
+ 204               		.loc 1 128 6 is_stmt 1 view .LVU64
+ 205               	.LBB13:
+ 150:main.c        **** 		{
+ 151:main.c        **** 			TIMSK1 = (1 << OCIE1B);
+ 206               		.loc 1 151 4 view .LVU65
+ 207               		.loc 1 151 11 is_stmt 0 view .LVU66
+ 208 00d2 84E0      		ldi r24,lo8(4)
+ 209 00d4 8093 6F00 		sts 111,r24
+ 152:main.c        **** 			line_handler = &blank_line;
+ 210               		.loc 1 152 4 is_stmt 1 view .LVU67
+ 211               		.loc 1 152 17 is_stmt 0 view .LVU68
+ 212 00d8 80E0      		ldi r24,lo8(gs(blank_line))
+ 213 00da 90E0      		ldi r25,hi8(gs(blank_line))
+ 214 00dc 9093 0000 		sts line_handler+1,r25
+ 215 00e0 8093 0000 		sts line_handler,r24
+ 153:main.c        **** 			flag = 1;
+ 216               		.loc 1 153 4 is_stmt 1 view .LVU69
+ 217               		.loc 1 153 9 is_stmt 0 view .LVU70
+ 218 00e4 81E0      		ldi r24,lo8(1)
+ 219 00e6 8093 0000 		sts flag,r24
+ 154:main.c        **** 		}
+ 155:main.c        **** 		else
+ 156:main.c        **** 		{
+ 157:main.c        **** 			video_ptr += VIDEO_WIDTH;
+ 158:main.c        **** 		}
+ 159:main.c        **** 	}
+ 160:main.c        **** }
+ 220               		.loc 1 160 1 view .LVU71
+ 221 00ea 0895      		ret
+ 222               	.L10:
+ 223               	.LBE13:
+ 224               	.LBE12:
+ 157:main.c        **** 		}
+ 225               		.loc 1 157 4 is_stmt 1 view .LVU72
+ 157:main.c        **** 		}
+ 226               		.loc 1 157 14 is_stmt 0 view .LVU73
+ 227 00ec 8091 0000 		lds r24,video_ptr
+ 228 00f0 9091 0000 		lds r25,video_ptr+1
+ 229 00f4 8896      		adiw r24,40
+ 230 00f6 9093 0000 		sts video_ptr+1,r25
+ 231 00fa 8093 0000 		sts video_ptr,r24
+ 232               	/* epilogue start */
+ 233               		.loc 1 160 1 view .LVU74
+ 234 00fe 0895      		ret
+ 235               		.cfi_endproc
+ 236               	.LFE5:
+ 238               	.global	__vector_11
+ 240               	__vector_11:
+ 241               	.LFB2:
+  98:main.c        **** 	sei();
+ 242               		.loc 1 98 1 is_stmt 1 view -0
+ 243               		.cfi_startproc
+ 244               		__gcc_isr 1
+ 245               	/* prologue: Signal */
+ 246               	/* frame size = 0 */
+ 247               	/* stack size = 0...3 */
+ 248               	.L__stack_usage = 0 + __gcc_isr.n_pushed
+  99:main.c        **** 	asm("sleep\n");
+ 249               		.loc 1 99 2 view .LVU76
+ 250               	/* #APP */
+ 251               	 ;  99 "main.c" 1
+ 252 0100 7894      		sei
+ 253               	 ;  0 "" 2
+ 100:main.c        **** }
+ 254               		.loc 1 100 2 view .LVU77
+ 255               	 ;  100 "main.c" 1
+ 256 0102 8895      		sleep
+ 257               	
+ 258               	 ;  0 "" 2
+ 259               	/* #NOAPP */
+ 260               	/* epilogue start */
+ 101:main.c        **** 
+ 261               		.loc 1 101 1 is_stmt 0 view .LVU78
+ 262               		__gcc_isr 2
+ 263 0104 1895      		reti
+ 264               		__gcc_isr 0,r0
+ 265               		.cfi_endproc
+ 266               	.LFE2:
+ 268               	.global	__vector_12
+ 270               	__vector_12:
+ 271               	.LFB3:
+ 104:main.c        **** 	line_handler();
+ 272               		.loc 1 104 1 is_stmt 1 view -0
+ 273               		.cfi_startproc
+ 274 0106 1F92      		push r1
+ 275               	.LCFI0:
+ 276               		.cfi_def_cfa_offset 3
+ 277               		.cfi_offset 1, -2
+ 278 0108 0F92      		push r0
+ 279               	.LCFI1:
+ 280               		.cfi_def_cfa_offset 4
+ 281               		.cfi_offset 0, -3
+ 282 010a 0FB6      		in r0,__SREG__
+ 283 010c 0F92      		push r0
+ 284 010e 1124      		clr __zero_reg__
+ 285 0110 2F93      		push r18
+ 286               	.LCFI2:
+ 287               		.cfi_def_cfa_offset 5
+ 288               		.cfi_offset 18, -4
+ 289 0112 3F93      		push r19
+ 290               	.LCFI3:
+ 291               		.cfi_def_cfa_offset 6
+ 292               		.cfi_offset 19, -5
+ 293 0114 4F93      		push r20
+ 294               	.LCFI4:
+ 295               		.cfi_def_cfa_offset 7
+ 296               		.cfi_offset 20, -6
+ 297 0116 5F93      		push r21
+ 298               	.LCFI5:
+ 299               		.cfi_def_cfa_offset 8
+ 300               		.cfi_offset 21, -7
+ 301 0118 6F93      		push r22
+ 302               	.LCFI6:
+ 303               		.cfi_def_cfa_offset 9
+ 304               		.cfi_offset 22, -8
+ 305 011a 7F93      		push r23
+ 306               	.LCFI7:
+ 307               		.cfi_def_cfa_offset 10
+ 308               		.cfi_offset 23, -9
+ 309 011c 8F93      		push r24
+ 310               	.LCFI8:
+ 311               		.cfi_def_cfa_offset 11
+ 312               		.cfi_offset 24, -10
+ 313 011e 9F93      		push r25
+ 314               	.LCFI9:
+ 315               		.cfi_def_cfa_offset 12
+ 316               		.cfi_offset 25, -11
+ 317 0120 AF93      		push r26
+ 318               	.LCFI10:
+ 319               		.cfi_def_cfa_offset 13
+ 320               		.cfi_offset 26, -12
+ 321 0122 BF93      		push r27
+ 322               	.LCFI11:
+ 323               		.cfi_def_cfa_offset 14
+ 324               		.cfi_offset 27, -13
+ 325 0124 EF93      		push r30
+ 326               	.LCFI12:
+ 327               		.cfi_def_cfa_offset 15
+ 328               		.cfi_offset 30, -14
+ 329 0126 FF93      		push r31
+ 330               	.LCFI13:
+ 331               		.cfi_def_cfa_offset 16
+ 332               		.cfi_offset 31, -15
+ 333               	/* prologue: Signal */
+ 334               	/* frame size = 0 */
+ 335               	/* stack size = 15 */
+ 336               	.L__stack_usage = 15
+ 105:main.c        **** 	++scanline;
+ 337               		.loc 1 105 2 view .LVU80
+ 338 0128 E091 0000 		lds r30,line_handler
+ 339 012c F091 0000 		lds r31,line_handler+1
+ 340 0130 0995      		icall
+ 341               	.LVL9:
+ 106:main.c        **** }
+ 342               		.loc 1 106 2 view .LVU81
+ 343 0132 8091 0000 		lds r24,scanline
+ 344 0136 9091 0000 		lds r25,scanline+1
+ 345 013a 0196      		adiw r24,1
+ 346 013c 9093 0000 		sts scanline+1,r25
+ 347 0140 8093 0000 		sts scanline,r24
+ 348               	/* epilogue start */
+ 107:main.c        **** 
+ 349               		.loc 1 107 1 is_stmt 0 view .LVU82
+ 350 0144 FF91      		pop r31
+ 351 0146 EF91      		pop r30
+ 352 0148 BF91      		pop r27
+ 353 014a AF91      		pop r26
+ 354 014c 9F91      		pop r25
+ 355 014e 8F91      		pop r24
+ 356 0150 7F91      		pop r23
+ 357 0152 6F91      		pop r22
+ 358 0154 5F91      		pop r21
+ 359 0156 4F91      		pop r20
+ 360 0158 3F91      		pop r19
+ 361 015a 2F91      		pop r18
+ 362 015c 0F90      		pop r0
+ 363 015e 0FBE      		out __SREG__,r0
+ 364 0160 0F90      		pop r0
+ 365 0162 1F90      		pop r1
+ 366 0164 1895      		reti
+ 367               		.cfi_endproc
+ 368               	.LFE3:
+ 370               		.section	.text.startup,"ax",@progbits
+ 371               	.global	main
+ 373               	main:
+ 374               	.LFB6:
+ 161:main.c        **** 
+ 162:main.c        **** int main(void)
+ 163:main.c        **** {
+ 375               		.loc 1 163 1 is_stmt 1 view -0
+ 376               		.cfi_startproc
+ 377               	/* prologue: function */
+ 378               	/* frame size = 0 */
+ 379               	/* stack size = 0 */
+ 380               	.L__stack_usage = 0
+ 164:main.c        **** 	u8 cnt, x, y, c, cv;
+ 381               		.loc 1 164 2 view .LVU84
+ 165:main.c        **** 	x = 0;
+ 382               		.loc 1 165 2 view .LVU85
+ 383               	.LVL10:
+ 166:main.c        **** 	y = 0;
+ 384               		.loc 1 166 2 view .LVU86
+ 167:main.c        **** 	cv = 1;
+ 385               		.loc 1 167 2 view .LVU87
+ 168:main.c        **** 	cnt = 0;
+ 386               		.loc 1 168 2 view .LVU88
+ 169:main.c        **** 
+ 170:main.c        **** 	DDRC |= (1 << 0);
+ 387               		.loc 1 170 2 view .LVU89
+ 388               		.loc 1 170 7 is_stmt 0 view .LVU90
+ 389 0000 389A      		sbi 0x7,0
+ 171:main.c        **** 	SPCR = (1 << SPE);
+ 390               		.loc 1 171 2 is_stmt 1 view .LVU91
+ 391               		.loc 1 171 7 is_stmt 0 view .LVU92
+ 392 0002 80E4      		ldi r24,lo8(64)
+ 393 0004 8CBD      		out 0x2c,r24
+ 172:main.c        **** 
+ 173:main.c        **** 	/* tv text */
+ 174:main.c        **** 	UBRR0 = 0;
+ 394               		.loc 1 174 2 is_stmt 1 view .LVU93
+ 395               		.loc 1 174 8 is_stmt 0 view .LVU94
+ 396 0006 1092 C500 		sts 196+1,__zero_reg__
+ 397 000a 1092 C400 		sts 196,__zero_reg__
+ 175:main.c        **** 	XCK_DIR |= (1 << XCK_PIN);
+ 398               		.loc 1 175 2 is_stmt 1 view .LVU95
+ 399               		.loc 1 175 10 is_stmt 0 view .LVU96
+ 400 000e 549A      		sbi 0xa,4
+ 176:main.c        **** 	UCSR0C = (1 << UMSEL00) | (1 << UMSEL01);
+ 401               		.loc 1 176 2 is_stmt 1 view .LVU97
+ 402               		.loc 1 176 9 is_stmt 0 view .LVU98
+ 403 0010 80EC      		ldi r24,lo8(-64)
+ 404 0012 8093 C200 		sts 194,r24
+ 177:main.c        **** 	VIDEO_DIR |= (1 << VIDEO_PIN);
+ 405               		.loc 1 177 2 is_stmt 1 view .LVU99
+ 406               		.loc 1 177 12 is_stmt 0 view .LVU100
+ 407 0016 519A      		sbi 0xa,1
+ 178:main.c        **** 	SYNC_DIR |= (1 << SYNC_PIN);
+ 408               		.loc 1 178 2 is_stmt 1 view .LVU101
+ 409               		.loc 1 178 11 is_stmt 0 view .LVU102
+ 410 0018 219A      		sbi 0x4,1
+ 179:main.c        **** 	VIDEO_OUT &= ~(1 << VIDEO_PIN);
+ 411               		.loc 1 179 2 is_stmt 1 view .LVU103
+ 412               		.loc 1 179 12 is_stmt 0 view .LVU104
+ 413 001a 5998      		cbi 0xb,1
+ 180:main.c        **** 	SYNC_OUT |= (1 << SYNC_PIN);
+ 414               		.loc 1 180 2 is_stmt 1 view .LVU105
+ 415               		.loc 1 180 11 is_stmt 0 view .LVU106
+ 416 001c 299A      		sbi 0x5,1
+ 181:main.c        **** 	TCCR1A = (1 << COM1A1) | (1 << COM1A0) | (1 << WGM11);
+ 417               		.loc 1 181 2 is_stmt 1 view .LVU107
+ 418               		.loc 1 181 9 is_stmt 0 view .LVU108
+ 419 001e 82EC      		ldi r24,lo8(-62)
+ 420 0020 8093 8000 		sts 128,r24
+ 182:main.c        **** 	TCCR1B = (1 << WGM13) | (1 << WGM12) | (1 << CS10);
+ 421               		.loc 1 182 2 is_stmt 1 view .LVU109
+ 422               		.loc 1 182 9 is_stmt 0 view .LVU110
+ 423 0024 89E1      		ldi r24,lo8(25)
+ 424 0026 8093 8100 		sts 129,r24
+ 183:main.c        **** 	ICR1 = _NTSC_CYCLES_SCANLINE;
+ 425               		.loc 1 183 2 is_stmt 1 view .LVU111
+ 426               		.loc 1 183 7 is_stmt 0 view .LVU112
+ 427 002a 87EF      		ldi r24,lo8(-9)
+ 428 002c 93E0      		ldi r25,lo8(3)
+ 429 002e 9093 8700 		sts 134+1,r25
+ 430 0032 8093 8600 		sts 134,r24
+ 184:main.c        **** 	OCR1A = _CYCLES_HSYNC;
+ 431               		.loc 1 184 2 is_stmt 1 view .LVU113
+ 432               		.loc 1 184 8 is_stmt 0 view .LVU114
+ 433 0036 8AE4      		ldi r24,lo8(74)
+ 434 0038 90E0      		ldi r25,0
+ 435 003a 9093 8900 		sts 136+1,r25
+ 436 003e 8093 8800 		sts 136,r24
+ 185:main.c        **** 	OCR1B = _NTSC_CYCLES_OUTPUT_START - 79;
+ 437               		.loc 1 185 2 is_stmt 1 view .LVU115
+ 438               		.loc 1 185 8 is_stmt 0 view .LVU116
+ 439 0042 80E7      		ldi r24,lo8(112)
+ 440 0044 90E0      		ldi r25,0
+ 441 0046 9093 8B00 		sts 138+1,r25
+ 442 004a 8093 8A00 		sts 138,r24
+ 186:main.c        **** 	TIMSK1 = (1 << OCIE1B);
+ 443               		.loc 1 186 2 is_stmt 1 view .LVU117
+ 444               		.loc 1 186 9 is_stmt 0 view .LVU118
+ 445 004e 84E0      		ldi r24,lo8(4)
+ 446 0050 8093 6F00 		sts 111,r24
+ 187:main.c        **** 	TIMSK0 = 0;
+ 447               		.loc 1 187 2 is_stmt 1 view .LVU119
+ 448               		.loc 1 187 9 is_stmt 0 view .LVU120
+ 449 0054 1092 6E00 		sts 110,__zero_reg__
+ 188:main.c        **** 	SMCR = (1 << SE);
+ 450               		.loc 1 188 2 is_stmt 1 view .LVU121
+ 451               		.loc 1 188 7 is_stmt 0 view .LVU122
+ 452 0058 81E0      		ldi r24,lo8(1)
+ 453 005a 83BF      		out 0x33,r24
+ 189:main.c        **** 	sei();
+ 454               		.loc 1 189 2 is_stmt 1 view .LVU123
+ 455               	/* #APP */
+ 456               	 ;  189 "main.c" 1
+ 457 005c 7894      		sei
+ 458               	 ;  0 "" 2
+ 166:main.c        **** 	cv = 1;
+ 459               		.loc 1 166 4 is_stmt 0 view .LVU124
+ 460               	/* #NOAPP */
+ 461 005e 90E0      		ldi r25,0
+ 165:main.c        **** 	y = 0;
+ 462               		.loc 1 165 4 view .LVU125
+ 463 0060 80E0      		ldi r24,0
+ 168:main.c        **** 
+ 464               		.loc 1 168 6 view .LVU126
+ 465 0062 C0E0      		ldi r28,0
+ 190:main.c        **** 
+ 191:main.c        **** 	for(;;)
+ 192:main.c        **** 	{
+ 193:main.c        **** 		if(flag)
+ 194:main.c        **** 		{
+ 195:main.c        **** 			++cnt;
+ 196:main.c        **** 			if(cnt == 15)
+ 197:main.c        **** 			{
+ 198:main.c        **** 				cnt = 0;
+ 199:main.c        **** 				if(cv)
+ 200:main.c        **** 				{
+ 201:main.c        **** 					video_memory[0] ^= (1 << 7);
+ 202:main.c        **** 				}
+ 203:main.c        **** 				else
+ 204:main.c        **** 				{
+ 205:main.c        **** 					video_memory[0] &= ~(1 << 7);
+ 206:main.c        **** 				}
+ 207:main.c        **** 			}
+ 208:main.c        **** 
+ 209:main.c        **** 			PORTC |= (1 << 0);
+ 210:main.c        **** 			for(;;)
+ 211:main.c        **** 			{
+ 212:main.c        **** 				c = spi_receive();
+ 213:main.c        **** 				if(c == '\0')
+ 214:main.c        **** 				{
+ 215:main.c        **** 					break;
+ 216:main.c        **** 				}
+ 217:main.c        **** 				else if(c == '\n')
+ 218:main.c        **** 				{
+ 219:main.c        **** 					x = 0;
+ 220:main.c        **** 					++y;
+ 221:main.c        **** 				}
+ 222:main.c        **** 				else
+ 223:main.c        **** 				{
+ 224:main.c        **** 					video_memory[y * VIDEO_WIDTH + x] = c;
+ 466               		.loc 1 224 21 view .LVU127
+ 467 0064 D8E2      		ldi r29,lo8(40)
+ 468               	.LVL11:
+ 469               	.L17:
+ 191:main.c        **** 	{
+ 470               		.loc 1 191 2 is_stmt 1 view .LVU128
+ 193:main.c        **** 		{
+ 471               		.loc 1 193 3 view .LVU129
+ 193:main.c        **** 		{
+ 472               		.loc 1 193 6 is_stmt 0 view .LVU130
+ 473 0066 2091 0000 		lds r18,flag
+ 193:main.c        **** 		{
+ 474               		.loc 1 193 5 view .LVU131
+ 475 006a 2223      		tst r18
+ 476 006c 01F0      		breq .L17
+ 195:main.c        **** 			if(cnt == 15)
+ 477               		.loc 1 195 4 is_stmt 1 view .LVU132
+ 478 006e CF5F      		subi r28,lo8(-(1))
+ 479               	.LVL12:
+ 196:main.c        **** 			{
+ 480               		.loc 1 196 4 view .LVU133
+ 196:main.c        **** 			{
+ 481               		.loc 1 196 6 is_stmt 0 view .LVU134
+ 482 0070 CF30      		cpi r28,lo8(15)
+ 483 0072 01F4      		brne .L18
+ 198:main.c        **** 				if(cv)
+ 484               		.loc 1 198 5 is_stmt 1 view .LVU135
+ 485               	.LVL13:
+ 199:main.c        **** 				{
+ 486               		.loc 1 199 5 view .LVU136
+ 201:main.c        **** 				}
+ 487               		.loc 1 201 6 view .LVU137
+ 201:main.c        **** 				}
+ 488               		.loc 1 201 22 is_stmt 0 view .LVU138
+ 489 0074 2091 0000 		lds r18,video_memory
+ 490 0078 2058      		subi r18,lo8(-(-128))
+ 491 007a 2093 0000 		sts video_memory,r18
+ 198:main.c        **** 				if(cv)
+ 492               		.loc 1 198 9 view .LVU139
+ 493 007e C0E0      		ldi r28,0
+ 494               	.LVL14:
+ 495               	.L18:
+ 209:main.c        **** 			for(;;)
+ 496               		.loc 1 209 4 is_stmt 1 view .LVU140
+ 209:main.c        **** 			for(;;)
+ 497               		.loc 1 209 10 is_stmt 0 view .LVU141
+ 498 0080 409A      		sbi 0x8,0
+ 499               	.LVL15:
+ 500               	.L19:
+ 501               	.LBB16:
+ 502               	.LBB17:
+  16:main.c        **** 	return SPDR;
+ 503               		.loc 1 16 30 is_stmt 1 view .LVU142
+  16:main.c        **** 	return SPDR;
+ 504               		.loc 1 16 7 view .LVU143
+ 505 0082 0DB4      		in __tmp_reg__,0x2d
+ 506 0084 07FE      		sbrs __tmp_reg__,7
+ 507 0086 00C0      		rjmp .L19
+  17:main.c        **** }
+ 508               		.loc 1 17 2 view .LVU144
+  17:main.c        **** }
+ 509               		.loc 1 17 9 is_stmt 0 view .LVU145
+ 510 0088 2EB5      		in r18,0x2e
+ 511               	.LVL16:
+  17:main.c        **** }
+ 512               		.loc 1 17 9 view .LVU146
+ 513               	.LBE17:
+ 514               	.LBE16:
+ 213:main.c        **** 				{
+ 515               		.loc 1 213 5 is_stmt 1 view .LVU147
+ 213:main.c        **** 				{
+ 516               		.loc 1 213 7 is_stmt 0 view .LVU148
+ 517 008a 2223      		tst r18
+ 518 008c 01F0      		breq .L20
+ 217:main.c        **** 				{
+ 519               		.loc 1 217 10 is_stmt 1 view .LVU149
+ 217:main.c        **** 				{
+ 520               		.loc 1 217 12 is_stmt 0 view .LVU150
+ 521 008e 2A30      		cpi r18,lo8(10)
+ 522 0090 01F4      		brne .L21
+ 523               	.L30:
+ 225:main.c        **** 					++x;
+ 226:main.c        **** 				}
+ 227:main.c        **** 
+ 228:main.c        **** 				if(x == VIDEO_WIDTH)
+ 229:main.c        **** 				{
+ 230:main.c        **** 					x = 0;
+ 524               		.loc 1 230 6 is_stmt 1 view .LVU151
+ 525               	.LVL17:
+ 231:main.c        **** 					++y;
+ 526               		.loc 1 231 6 view .LVU152
+ 527 0092 9F5F      		subi r25,lo8(-(1))
+ 528               	.LVL18:
+ 230:main.c        **** 					++y;
+ 529               		.loc 1 230 8 is_stmt 0 view .LVU153
+ 530 0094 80E0      		ldi r24,0
+ 531 0096 00C0      		rjmp .L22
+ 532               	.LVL19:
+ 533               	.L21:
+ 224:main.c        **** 					++x;
+ 534               		.loc 1 224 6 is_stmt 1 view .LVU154
+ 224:main.c        **** 					++x;
+ 535               		.loc 1 224 21 is_stmt 0 view .LVU155
+ 536 0098 9D9F      		mul r25,r29
+ 537 009a F001      		movw r30,r0
+ 538 009c 1124      		clr __zero_reg__
+ 224:main.c        **** 					++x;
+ 539               		.loc 1 224 40 view .LVU156
+ 540 009e E050      		subi r30,lo8(-(video_memory))
+ 541 00a0 F040      		sbci r31,hi8(-(video_memory))
+ 542 00a2 E80F      		add r30,r24
+ 543 00a4 F11D      		adc r31,__zero_reg__
+ 544 00a6 2083      		st Z,r18
+ 225:main.c        **** 				}
+ 545               		.loc 1 225 6 is_stmt 1 view .LVU157
+ 546 00a8 8F5F      		subi r24,lo8(-(1))
+ 547               	.LVL20:
+ 228:main.c        **** 				{
+ 548               		.loc 1 228 5 view .LVU158
+ 228:main.c        **** 				{
+ 549               		.loc 1 228 7 is_stmt 0 view .LVU159
+ 550 00aa 8832      		cpi r24,lo8(40)
+ 551 00ac 01F0      		breq .L30
+ 552               	.LVL21:
+ 553               	.L22:
+ 232:main.c        **** 				}
+ 233:main.c        **** 
+ 234:main.c        **** 				if(y == VIDEO_HEIGHT)
+ 554               		.loc 1 234 5 is_stmt 1 view .LVU160
+ 555               		.loc 1 234 7 is_stmt 0 view .LVU161
+ 556 00ae 9931      		cpi r25,lo8(25)
+ 557 00b0 01F4      		brne .L19
+ 235:main.c        **** 				{
+ 236:main.c        **** 					--y;
+ 558               		.loc 1 236 6 is_stmt 1 view .LVU162
+ 559               	.LVL22:
+ 237:main.c        **** 					x = 0;
+ 560               		.loc 1 237 6 view .LVU163
+ 238:main.c        **** 					memmove(video_memory, video_memory + VIDEO_WIDTH, VIDEO_WIDTH * (VIDEO_HEIGHT - 1));
+ 561               		.loc 1 238 6 view .LVU164
+ 562 00b2 40EC      		ldi r20,lo8(-64)
+ 563 00b4 53E0      		ldi r21,lo8(3)
+ 564 00b6 60E0      		ldi r22,lo8(video_memory+40)
+ 565 00b8 70E0      		ldi r23,hi8(video_memory+40)
+ 566 00ba 80E0      		ldi r24,lo8(video_memory)
+ 567 00bc 90E0      		ldi r25,hi8(video_memory)
+ 568 00be 0E94 0000 		call memmove
+ 569               	.LVL23:
+ 239:main.c        **** 					memset(video_memory + VIDEO_WIDTH * (VIDEO_HEIGHT - 1), ' ', VIDEO_WIDTH);
+ 570               		.loc 1 239 6 view .LVU165
+ 571 00c2 48E2      		ldi r20,lo8(40)
+ 572 00c4 50E0      		ldi r21,0
+ 573 00c6 60E2      		ldi r22,lo8(32)
+ 574 00c8 70E0      		ldi r23,0
+ 575 00ca 80E0      		ldi r24,lo8(video_memory+960)
+ 576 00cc 90E0      		ldi r25,hi8(video_memory+960)
+ 577 00ce 0E94 0000 		call memset
+ 578               	.LVL24:
+ 236:main.c        **** 					x = 0;
+ 579               		.loc 1 236 6 is_stmt 0 view .LVU166
+ 580 00d2 98E1      		ldi r25,lo8(24)
+ 237:main.c        **** 					memmove(video_memory, video_memory + VIDEO_WIDTH, VIDEO_WIDTH * (VIDEO_HEIGHT - 1));
+ 581               		.loc 1 237 8 view .LVU167
+ 582 00d4 80E0      		ldi r24,0
+ 583 00d6 00C0      		rjmp .L19
+ 584               	.LVL25:
+ 585               	.L20:
+ 240:main.c        **** 				}
+ 241:main.c        **** 			}
+ 242:main.c        **** 
+ 243:main.c        **** 			PORTC &= ~(1 << 0);
+ 586               		.loc 1 243 4 is_stmt 1 view .LVU168
+ 587               		.loc 1 243 10 is_stmt 0 view .LVU169
+ 588 00d8 4098      		cbi 0x8,0
+ 244:main.c        **** 			flag = 0;
+ 589               		.loc 1 244 4 is_stmt 1 view .LVU170
+ 590               		.loc 1 244 9 is_stmt 0 view .LVU171
+ 591 00da 1092 0000 		sts flag,__zero_reg__
+ 592 00de 00C0      		rjmp .L17
+ 593               		.cfi_endproc
+ 594               	.LFE6:
+ 596               		.local	char_row.1822
+ 597               		.comm	char_row.1822,1,1
+ 598               		.data
+ 601               	line_handler:
+ 602 0000 0000      		.word	gs(blank_line)
+ 603               		.local	scanline
+ 604               		.comm	scanline,2,1
+ 607               	video_ptr:
+ 608 0002 0000      		.word	video_memory
+ 609               		.local	video_memory
+ 610               		.comm	video_memory,1000,1
+ 611               		.local	flag
+ 612               		.comm	flag,1,1
+ 613               		.section	.progmem.data,"a",@progbits
+ 616               	font:
+ 617 0000 00        		.string	""
+ 618 0001 F00F FF00 		.string	"\360\017\377"
+ 619 0005 F00F FF00 		.string	"\360\017\377"
+ 620 0009 F00F FF00 		.string	"\360\017\377"
+ 621 000d F00F FF80 		.string	"\360\017\377\200\001\377\030\030\030"
+ 621      01FF 1818 
+ 621      1800 
+ 622 0017 18FF 1800 		.string	"\030\377\030"
+ 623 001b 1800      		.string	"\030"
+ 624 001d 1800      		.string	"\030"
+ 625 001f 1800      		.string	"\030"
+ 626 0021 306C 6C30 		.string	"0ll0"
+ 626      00
+ 627 0026 3860 1860 		.string	"8`\030`"
+ 627      00
+ 628 002b 00        		.string	""
+ 629 002c 00        		.string	""
+ 630 002d 00        		.string	""
+ 631 002e 00        		.string	""
+ 632 002f 067C 3078 		.string	"\006|0xx\034\3748\374xx"
+ 632      781C FC38 
+ 632      FC78 7800 
+ 633 003b 00        		.string	""
+ 634 003c 1800      		.string	"\030"
+ 635 003e 6078 7C30 		.string	"`x|0\374<\370\376\376<\314x\036\346\360\306\3068\374x\374x\374\314\314\306\306\314\376x\3
+ 635      FC3C F8FE 
+ 635      FE3C CC78 
+ 635      1EE6 F0C6 
+ 635      C638 FC78 
+ 636 0060 3000      		.string	"0"
+ 637 0062 E000      		.string	"\340"
+ 638 0064 1C00      		.string	"\034"
+ 639 0066 3800      		.string	"8"
+ 640 0068 E030 0CE0 		.string	"\3400\f\340p"
+ 640      7000 
+ 641 006e 00        		.string	""
+ 642 006f 00        		.string	""
+ 643 0070 00        		.string	""
+ 644 0071 00        		.string	""
+ 645 0072 00        		.string	""
+ 646 0073 00        		.string	""
+ 647 0074 1000      		.string	"\020"
+ 648 0076 00        		.string	""
+ 649 0077 00        		.string	""
+ 650 0078 00        		.string	""
+ 651 0079 00        		.string	""
+ 652 007a 00        		.string	""
+ 653 007b 1C18 E076 		.string	"\034\030\340v\252"
+ 653      AA00 
+ 654 0081 F00F FF00 		.string	"\360\017\377"
+ 655 0085 F00F FF00 		.string	"\360\017\377"
+ 656 0089 F00F FF00 		.string	"\360\017\377"
+ 657 008d F00F FFE0 		.string	"\360\017\377\340\007\377\030\030\030"
+ 657      07FF 1818 
+ 657      1800 
+ 658 0097 18FF 1800 		.string	"\030\377\030"
+ 659 009b 1800      		.string	"\030"
+ 660 009d 1800      		.string	"\030"
+ 661 009f 1800      		.string	"\030"
+ 662 00a1 786C 6C7C 		.string	"xll|\306l`00f0"
+ 662      C66C 6030 
+ 662      3066 3000 
+ 663 00ad 00        		.string	""
+ 664 00ae 00        		.string	""
+ 665 00af 0CC6 70CC 		.string	"\f\306p\314\314<\300`\314\314\314000"
+ 665      CC3C C060 
+ 665      CCCC CC30 
+ 665      3030 00
+ 666 00be 30CC C678 		.string	"0\314\306xfflbbf\3140\ff`\356\346lf\314f\314\264\314\314\306\306\314\306``\0308"
+ 666      6666 6C62 
+ 666      6266 CC30 
+ 666      0C66 60EE 
+ 666      E66C 66CC 
+ 667 00e0 3000      		.string	"0"
+ 668 00e2 6000      		.string	"`"
+ 669 00e4 0C00      		.string	"\f"
+ 670 00e6 6C00      		.string	"l"
+ 671 00e8 6000      		.string	"`"
+ 672 00ea 00        		.string	""
+ 673 00eb 6030 00   		.string	"`0"
+ 674 00ee 00        		.string	""
+ 675 00ef 00        		.string	""
+ 676 00f0 00        		.string	""
+ 677 00f1 00        		.string	""
+ 678 00f2 00        		.string	""
+ 679 00f3 00        		.string	""
+ 680 00f4 3000      		.string	"0"
+ 681 00f6 00        		.string	""
+ 682 00f7 00        		.string	""
+ 683 00f8 00        		.string	""
+ 684 00f9 00        		.string	""
+ 685 00fa 00        		.string	""
+ 686 00fb 3018 30DC 		.string	"0\0300\334U"
+ 686      5500 
+ 687 0101 F00F FF00 		.string	"\360\017\377"
+ 688 0105 F00F FF00 		.string	"\360\017\377"
+ 689 0109 F00F FF00 		.string	"\360\017\377"
+ 690 010d F00F FFF8 		.string	"\360\017\377\370\037\303\030<\030"
+ 690      1FC3 183C 
+ 690      1800 
+ 691 0117 187E 1800 		.string	"\030~\030"
+ 692 011b 1800      		.string	"\030"
+ 693 011d 1800      		.string	"\030"
+ 694 011f 1800      		.string	"\030"
+ 695 0121 786C FEC0 		.string	"xl\376\300\3148\300`\030<0"
+ 695      CC38 C060 
+ 695      183C 3000 
+ 696 012d 00        		.string	""
+ 697 012e 00        		.string	""
+ 698 012f 18CE 300C 		.string	"\030\3160\f\fl\370\300\f\314\31400`\374\030\f\336\314f\300fhh\300\3140\fl`\376\366\306f\3
+ 698      0C6C F8C0 
+ 698      0CCC CC30 
+ 698      3060 FC18 
+ 698      0CDE CC66 
+ 699 0160 1878 6078 		.string	"\030x`x\fx`vlp\ff0\314\370x\334v\334||\314\314\306\306\314\3740\0300"
+ 699      0C78 6076 
+ 699      6C70 0C66 
+ 699      30CC F878 
+ 699      DC76 DC7C 
+ 700 017f AA00      		.string	"\252"
+ 701 0181 F00F FF00 		.string	"\360\017\377"
+ 702 0185 F00F FF00 		.string	"\360\017\377"
+ 703 0189 F00F FF00 		.string	"\360\017\377"
+ 704 018d F00F FFFE 		.string	"\360\017\377\376\177\303\037<\030\037\037~\370\377\377\370\370\377\377"
+ 704      7FC3 1F3C 
+ 704      181F 1F7E 
+ 704      F8FF FFF8 
+ 704      F8FF FF00 
+ 705 01a1 3000      		.string	"0"
+ 706 01a3 6C78 1876 		.string	"lx\030v"
+ 706      00
+ 707 01a8 6018 FFFC 		.string	"`\030\377\374"
+ 707      00
+ 708 01ad FC00      		.string	"\374"
+ 709 01af 30DE 3038 		.string	"0\336088\314\f\370\030x|"
+ 709      38CC 0CF8 
+ 709      1878 7C00 
+ 710 01bb 00        		.string	""
+ 711 01bc C000      		.string	"\300"
+ 712 01be 0C18 DECC 		.string	"\f\030\336\314|\300fxx\300\3740\fx`\376\336\306|\314|p0\314\314\3268x\030`\030\030\306"
+ 712      7CC0 6678 
+ 712      78C0 FC30 
+ 712      0C78 60FE 
+ 712      DEC6 7CCC 
+ 713 01e0 00        		.string	""
+ 714 01e1 0C7C CC7C 		.string	"\f|\314|\314\360\314v0\fl0\376\314\314f\314v\3000\314\314\326l\314\230\340"
+ 714      CCF0 CC76 
+ 714      300C 6C30 
+ 714      FECC CC66 
+ 714      CC76 C030 
+ 715 01fd 1C00      		.string	"\034"
+ 716 01ff 5500      		.string	"U"
+ 717 0201 00        		.string	""
+ 718 0202 00        		.string	""
+ 719 0203 00        		.string	""
+ 720 0204 F0F0 F0F0 		.string	"\360\360\360\360\017\017\017\017\377\377\377\377\376\177\303\037~\030\037\037<\370\377\37
+ 720      0F0F 0F0F 
+ 720      FFFF FFFF 
+ 720      FE7F C31F 
+ 720      7E18 1F1F 
+ 721 0221 3000      		.string	"0"
+ 722 0223 FE0C 30DC 		.string	"\376\f0\334"
+ 722      00
+ 723 0228 6018 3C30 		.string	"`\030<0"
+ 723      00
+ 724 022d 00        		.string	""
+ 725 022e 00        		.string	""
+ 726 022f 60F6 3060 		.string	"`\3660`\f\376\f\3140\314\f"
+ 726      0CFE 0CCC 
+ 726      30CC 0C00 
+ 727 023b 00        		.string	""
+ 728 023c 6000      		.string	"`"
+ 729 023e 1830 DEFC 		.string	"\0300\336\374f\300fhh\316\3140\314lb\326\316\306`\334l\0340\314\314\376802`\f\030"
+ 729      66C0 6668 
+ 729      68CE CC30 
+ 729      CC6C 62D6 
+ 729      CEC6 60DC 
+ 730 025f 00        		.string	""
+ 731 0260 00        		.string	""
+ 732 0261 7C66 C0CC 		.string	"|f\300\314\374`\314f0\fx0\376\314\314f\314fx0\314\314\3768\31400\0300"
+ 732      FC60 CC66 
+ 732      300C 7830 
+ 732      FECC CC66 
+ 732      CC66 7830 
+ 733 027f AA00      		.string	"\252"
+ 734 0281 00        		.string	""
+ 735 0282 00        		.string	""
+ 736 0283 00        		.string	""
+ 737 0284 F0F0 F0F0 		.string	"\360\360\360\360\017\017\017\017\377\377\377\377\370\037\303"
+ 737      0F0F 0F0F 
+ 737      FFFF FFFF 
+ 737      F81F C300 
+ 738 0294 7E18 1818 		.string	"~\030\030\030<"
+ 738      3C00 
+ 739 029a 00        		.string	""
+ 740 029b 00        		.string	""
+ 741 029c 1818 1818 		.string	"\030\030\030\030"
+ 741      00
+ 742 02a1 00        		.string	""
+ 743 02a2 00        		.string	""
+ 744 02a3 6CF8 66CC 		.string	"l\370f\314"
+ 744      00
+ 745 02a8 3030 6630 		.string	"00f00"
+ 745      3000 
+ 746 02ae 30C0 E630 		.string	"0\300\3460\314\314\f\314\3140\314\030000\3740"
+ 746      CCCC 0CCC 
+ 746      CC30 CC18 
+ 746      3030 30FC 
+ 746      3000 
+ 747 02c0 C0CC 6666 		.string	"\300\314fflb`f\3140\314ff\306\306l`xf\3140\314x\356l0f`\006\030"
+ 747      6C62 6066 
+ 747      CC30 CC66 
+ 747      66C6 C66C 
+ 747      6078 66CC 
+ 748 02df 00        		.string	""
+ 749 02e0 00        		.string	""
+ 750 02e1 CC66 CCCC 		.string	"\314f\314\314\300`|f0\314l0\326\314\314||`\f4\314x\376l|d0\0300"
+ 750      C060 7C66 
+ 750      30CC 6C30 
+ 750      D6CC CC7C 
+ 750      7C60 0C34 
+ 751 02ff 5500      		.string	"U"
+ 752 0301 00        		.string	""
+ 753 0302 00        		.string	""
+ 754 0303 00        		.string	""
+ 755 0304 F0F0 F0F0 		.string	"\360\360\360\360\017\017\017\017\377\377\377\377\340\007\377"
+ 755      0F0F 0F0F 
+ 755      FFFF FFFF 
+ 755      E007 FF00 
+ 756 0314 FF18 1818 		.string	"\377\030\030\030\030"
+ 756      1800 
+ 757 031a 00        		.string	""
+ 758 031b 00        		.string	""
+ 759 031c 1818 1818 		.string	"\030\030\030\030"
+ 759      00
+ 760 0321 3000      		.string	"0"
+ 761 0323 6C30 C676 		.string	"l0\306v"
+ 761      00
+ 762 0328 1860 00   		.string	"\030`"
+ 763 032b 00        		.string	""
+ 764 032c 3000      		.string	"0"
+ 765 032e 3080 7CFC 		.string	"0\200|\374\374x\036xx0xp00\030"
+ 765      FC78 1E78 
+ 765      7830 7870 
+ 765      3030 1800 
+ 766 033e 6030 78CC 		.string	"`0x\314\374<\370\376\360>\314xx\346\376\306\3068\360\034\346xx\3740\306\306x\376x\002x"
+ 766      FC3C F8FE 
+ 766      F03E CC78 
+ 766      78E6 FEC6 
+ 766      C638 F01C 
+ 767 035f 00        		.string	""
+ 768 0360 00        		.string	""
+ 769 0361 76DC 7876 		.string	"v\334xvx\360\f\346x\314\346x\306\314x`\f\360\370\030v0l\306\f\374\034\030\340"
+ 769      78F0 0CE6 
+ 769      78CC E678 
+ 769      C6CC 7860 
+ 769      0CF0 F818 
+ 770 037f AA00      		.string	"\252"
+ 771 0381 00        		.string	""
+ 772 0382 00        		.string	""
+ 773 0383 00        		.string	""
+ 774 0384 F0F0 F0F0 		.string	"\360\360\360\360\017\017\017\017\377\377\377\377\200\001\377"
+ 774      0F0F 0F0F 
+ 774      FFFF FFFF 
+ 774      8001 FF00 
+ 775 0394 FF18 1818 		.string	"\377\030\030\030\030"
+ 775      1800 
+ 776 039a 00        		.string	""
+ 777 039b 00        		.string	""
+ 778 039c 1818 1818 		.string	"\030\030\030\030"
+ 778      00
+ 779 03a1 00        		.string	""
+ 780 03a2 00        		.string	""
+ 781 03a3 00        		.string	""
+ 782 03a4 00        		.string	""
+ 783 03a5 00        		.string	""
+ 784 03a6 00        		.string	""
+ 785 03a7 00        		.string	""
+ 786 03a8 00        		.string	""
+ 787 03a9 00        		.string	""
+ 788 03aa 00        		.string	""
+ 789 03ab 00        		.string	""
+ 790 03ac 6000      		.string	"`"
+ 791 03ae 00        		.string	""
+ 792 03af 00        		.string	""
+ 793 03b0 00        		.string	""
+ 794 03b1 00        		.string	""
+ 795 03b2 00        		.string	""
+ 796 03b3 00        		.string	""
+ 797 03b4 00        		.string	""
+ 798 03b5 00        		.string	""
+ 799 03b6 00        		.string	""
+ 800 03b7 00        		.string	""
+ 801 03b8 00        		.string	""
+ 802 03b9 00        		.string	""
+ 803 03ba 00        		.string	""
+ 804 03bb 6000      		.string	"`"
+ 805 03bd 00        		.string	""
+ 806 03be 00        		.string	""
+ 807 03bf 00        		.string	""
+ 808 03c0 00        		.string	""
+ 809 03c1 00        		.string	""
+ 810 03c2 00        		.string	""
+ 811 03c3 00        		.string	""
+ 812 03c4 00        		.string	""
+ 813 03c5 00        		.string	""
+ 814 03c6 00        		.string	""
+ 815 03c7 00        		.string	""
+ 816 03c8 00        		.string	""
+ 817 03c9 00        		.string	""
+ 818 03ca 00        		.string	""
+ 819 03cb 00        		.string	""
+ 820 03cc 00        		.string	""
+ 821 03cd 00        		.string	""
+ 822 03ce 00        		.string	""
+ 823 03cf 00        		.string	""
+ 824 03d0 00        		.string	""
+ 825 03d1 00        		.string	""
+ 826 03d2 00        		.string	""
+ 827 03d3 00        		.string	""
+ 828 03d4 00        		.string	""
+ 829 03d5 00        		.string	""
+ 830 03d6 00        		.string	""
+ 831 03d7 00        		.string	""
+ 832 03d8 00        		.string	""
+ 833 03d9 00        		.string	""
+ 834 03da 00        		.string	""
+ 835 03db 00        		.string	""
+ 836 03dc 00        		.string	""
+ 837 03dd 00        		.string	""
+ 838 03de 00        		.string	""
+ 839 03df FF00      		.string	"\377"
+ 840 03e1 00        		.string	""
+ 841 03e2 00        		.string	""
+ 842 03e3 00        		.string	""
+ 843 03e4 00        		.string	""
+ 844 03e5 00        		.string	""
+ 845 03e6 00        		.string	""
+ 846 03e7 F800      		.string	"\370"
+ 847 03e9 00        		.string	""
+ 848 03ea 7800      		.string	"x"
+ 849 03ec 00        		.string	""
+ 850 03ed 00        		.string	""
+ 851 03ee 00        		.string	""
+ 852 03ef 00        		.string	""
+ 853 03f0 F01E 00   		.string	"\360\036"
+ 854 03f3 00        		.string	""
+ 855 03f4 00        		.string	""
+ 856 03f5 00        		.string	""
+ 857 03f6 00        		.string	""
+ 858 03f7 00        		.string	""
+ 859 03f8 00        		.string	""
+ 860 03f9 F800      		.string	"\370"
+ 861 03fb 00        		.string	""
+ 862 03fc 00        		.string	""
+ 863 03fd 00        		.string	""
+ 864 03fe 00        		.string	""
+ 865 03ff 55FF 0FF0 		.string	"U\377\017\360"
+ 865      00
+ 866 0404 FF0F F000 		.string	"\377\017\360"
+ 867 0408 FF0F F000 		.string	"\377\017\360"
+ 868 040c FF0F F000 		.string	"\377\017\360"
+ 869 0410 7FFE 00   		.string	"\177\376"
+ 870 0413 E7E7 E7FF 		.string	"\347\347\347\377\347"
+ 870      E700 
+ 871 0419 E7FF E7FF 		.string	"\347\377\347\377\347\377\347\377\317\223\223\317\377\307\237\347\237\377\377\377\377\377\
+ 871      E7FF E7FF 
+ 871      CF93 93CF 
+ 871      FFC7 9FE7 
+ 871      9FFF FFFF 
+ 872 0484 FF0F F000 		.string	"\377\017\360"
+ 873 0488 FF0F F000 		.string	"\377\017\360"
+ 874 048c FF0F F000 		.string	"\377\017\360"
+ 875 0490 1FF8 00   		.string	"\037\370"
+ 876 0493 E7E7 E7FF 		.string	"\347\347\347\377\347"
+ 876      E700 
+ 877 0499 E7FF E7FF 		.string	"\347\377\347\377\347\377\347\377\207\223\223\2039\223\237\317\317\231\317\377\377\377\363
+ 877      E7FF E7FF 
+ 877      8793 9383 
+ 877      3993 9FCF 
+ 877      CF99 CFFF 
+ 878 0504 FF0F F000 		.string	"\377\017\360"
+ 879 0508 FF0F F000 		.string	"\377\017\360"
+ 880 050c FF0F F000 		.string	"\377\017\360"
+ 881 0510 07E0 3CE7 		.string	"\007\340<\347\303\347\377\347\201\347\377\347\377\347\377\347\377\207\223\001?3\307?\237\
+ 881      C3E7 FFE7 
+ 881      81E7 FFE7 
+ 881      FFE7 FFE7 
+ 881      FF87 9301 
+ 882 0584 FF0F F000 		.string	"\377\017\360"
+ 883 0588 FF0F F000 		.string	"\377\017\360"
+ 884 058c FF0F F000 		.string	"\377\017\360"
+ 885 0590 0180 3CE0 		.string	"\001\200<\340\303\347\340\340\201\007"
+ 885      C3E7 E0E0 
+ 885      8107 00
+ 886 059b 00        		.string	""
+ 887 059c 0707 00   		.string	"\007\007"
+ 888 059f 00        		.string	""
+ 889 05a0 FFCF FF93 		.string	"\377\317\377\223\207\347\211\377\237\347"
+ 889      87E7 89FF 
+ 889      9FE7 00
+ 890 05ab 03FF 03FF 		.string	"\003\377\003\377\317!\317\307\3073\363\007\347\207\203\377\377?\377\363\347!3\203?\231\20
+ 890      CF21 CFC7 
+ 890      C733 F307 
+ 890      E787 83FF 
+ 890      FF3F FFF3 
+ 891 060d 00        		.string	""
+ 892 060e 00        		.string	""
+ 893 060f 00        		.string	""
+ 894 0610 0180 3CE0 		.string	"\001\200<\340\201\347\340\340\303\007"
+ 894      81E7 E0E0 
+ 894      C307 00
+ 895 061b 00        		.string	""
+ 896 061c 0707 00   		.string	"\007\007"
+ 897 061f 00        		.string	""
+ 898 0620 FFCF FF01 		.string	"\377\317\377\001\363\317#\377\237\347\303\317\377\377\377\237\t\317\237\363\001\3633\3173
+ 898      F3CF 23FF 
+ 898      9FE7 C3CF 
+ 898      FFFF FF9F 
+ 898      09CF 9FF3 
+ 899 068d 00        		.string	""
+ 900 068e 00        		.string	""
+ 901 068f 00        		.string	""
+ 902 0690 07E0 3CFF 		.string	"\007\340<\377\201\347\347\347\303\377\377\377\347\347\347\347\377\377\377\223\007\2313\37
+ 902      81E7 E7E7 
+ 902      C3FF FFFF 
+ 902      E7E7 E7E7 
+ 902      FFFF FF93 
+ 903 070d 00        		.string	""
+ 904 070e 00        		.string	""
+ 905 070f 00        		.string	""
+ 906 0710 1FF8 00   		.string	"\037\370"
+ 907 0713 FF00      		.string	"\377"
+ 908 0715 E7E7 E7E7 		.string	"\347\347\347\347\377\377\377\347\347\347\347\377\317\377\223\3179\211\377\347\237\377\377
+ 908      FFFF FFE7 
+ 908      E7E7 E7FF 
+ 908      CFFF 93CF 
+ 908      3989 FFE7 
+ 909 078d 00        		.string	""
+ 910 078e 00        		.string	""
+ 911 078f 00        		.string	""
+ 912 0790 7FFE 00   		.string	"\177\376"
+ 913 0793 FF00      		.string	"\377"
+ 914 0795 E7E7 E7E7 		.ascii	"\347\347\347\347\377\377\377\347\347\347\347\377\377\377\377"
+ 914      FFFF FFE7 
+ 914      E7E7 E7FF 
+ 914      FFFF FF
+ 915 07a4 FFFF FFFF 		.ascii	"\377\377\377\377\377\377\377\377\237\377\377\377\377\377\377"
+ 915      FFFF FFFF 
+ 915      9FFF FFFF 
+ 915      FFFF FF
+ 916 07b3 FFFF FFFF 		.ascii	"\377\377\377\377\377\377\377\377\237\377\377\377\377\377\377"
+ 916      FFFF FFFF 
+ 916      9FFF FFFF 
+ 916      FFFF FF
+ 917 07c2 FFFF FFFF 		.ascii	"\377\377\377\377\377\377\377\377\377\377\377\377\377\377"
+ 917      FFFF FFFF 
+ 917      FFFF FFFF 
+ 917      FFFF 
+ 918 07d0 FFFF FFFF 		.string	"\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377"
+ 918      FFFF FFFF 
+ 918      FFFF FFFF 
+ 918      FFFF FF00 
+ 919 07e0 FFFF FFFF 		.ascii	"\377\377\377\377\377\377\377\007\377\377\207\377\377\377\377"
+ 919      FFFF FF07 
+ 919      FFFF 87FF 
+ 919      FFFF FF
+ 920 07ef FF0F E1FF 		.ascii	"\377\017\341\377\377\377\377\377\377\377\007\377\377\377\377"
+ 920      FFFF FFFF 
+ 920      FFFF 07FF 
+ 920      FFFF FF
+ 921 07fe FFAA      		.ascii	"\377\252"
+ 922               		.text
+ 923               	.Letext0:
+ 924               		.file 2 "/usr/avr/include/stdint.h"
+ 925               		.file 3 "/usr/avr/include/string.h"
+DEFINED SYMBOLS
+                            *ABS*:0000000000000000 main.c
+     /tmp/ccnt4Pcq.s:2      *ABS*:000000000000003e __SP_H__
+     /tmp/ccnt4Pcq.s:3      *ABS*:000000000000003d __SP_L__
+     /tmp/ccnt4Pcq.s:4      *ABS*:000000000000003f __SREG__
+     /tmp/ccnt4Pcq.s:5      *ABS*:0000000000000000 __tmp_reg__
+     /tmp/ccnt4Pcq.s:6      *ABS*:0000000000000001 __zero_reg__
+     /tmp/ccnt4Pcq.s:12     .text:0000000000000000 blank_line
+     /tmp/ccnt4Pcq.s:597    .bss:0000000000000001 scanline
+     /tmp/ccnt4Pcq.s:604    .bss:0000000000000003 video_memory
+     /tmp/ccnt4Pcq.s:607    .data:0000000000000002 video_ptr
+     /tmp/ccnt4Pcq.s:91     .text:000000000000005e active_line
+     /tmp/ccnt4Pcq.s:601    .data:0000000000000000 line_handler
+                             .bss:0000000000000000 char_row.1822
+     /tmp/ccnt4Pcq.s:616    .progmem.data:0000000000000000 font
+     /tmp/ccnt4Pcq.s:610    .bss:00000000000003eb flag
+     /tmp/ccnt4Pcq.s:240    .text:0000000000000100 __vector_11
+                            *ABS*:0000000000000000 __gcc_isr.n_pushed.001
+     /tmp/ccnt4Pcq.s:270    .text:0000000000000106 __vector_12
+     /tmp/ccnt4Pcq.s:373    .text.startup:0000000000000000 main
+
+UNDEFINED SYMBOLS
+memmove
+memset
+__do_copy_data
+__do_clear_bss
